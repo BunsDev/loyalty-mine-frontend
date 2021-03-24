@@ -1,5 +1,7 @@
 import React, { Component } from "react";
 import { toast } from "react-toastify";
+import BigNumber from "bignumber.js/bignumber";
+
 import Box from "./Boxes";
 import Row from "./Rows";
 import { InputField } from "./inputField";
@@ -59,6 +61,7 @@ export default class Pool extends Component {
       .send({ from: w3.address })
       .then((res) => {
         if (res.status === true) {
+          token.getApprovedAmount(w3, token.stakeAddress);
           toast.success("Successfully Approved.");
           this.setState({ isApproved: true });
         }
@@ -76,6 +79,7 @@ export default class Pool extends Component {
       .send({ from: w3.address })
       .then((res) => {
         toast.success("Successfully Staked.");
+        this.props.getTokenValues();
         this.setState(() => ({
           toStake: 0.0,
         }));
@@ -95,7 +99,7 @@ export default class Pool extends Component {
         toast.success("Successfully Withdrawn.");
         toast.success("Successfully Claimed.");
         token.rewards = null;
-
+        this.props.getTokenValues();
         this.setState(() => ({
           toWithdraw: 0.0,
         }));
@@ -118,16 +122,41 @@ export default class Pool extends Component {
   };
 
   onStakeChange = (e) => {
-    this.setState({ toStake: e.target.value });
+    let stakable = BigNumber(
+      convertToETH(this.props.token.stakeable, this.props.token.unit)
+    ).toNumber();
+
+    let toStake =
+      BigNumber(e.target.value).toNumber() > stakable
+        ? stakable
+        : BigNumber(e.target.value).toNumber();
+
+    this.setState({
+      toStake: isNaN(toStake) ? "" : toStake,
+    });
   };
 
   onWithdrawChange = (e) => {
-    this.setState({ toWithdraw: e.target.value });
+    let staked = BigNumber(
+      convertToETH(this.props.token.staked, this.props.token.unit)
+    ).toNumber();
+
+    let toWithdraw =
+      BigNumber(e.target.value).toNumber() > staked
+        ? staked
+        : BigNumber(e.target.value).toNumber();
+
+    this.setState({ toWithdraw: isNaN(toWithdraw) ? "" : toWithdraw });
   };
 
   render() {
     const { token, isConnected } = this.props;
-    const { toStake, toWithdraw, isApproved } = this.state;
+    const { toStake, toWithdraw } = this.state;
+
+    const approved = this.props.w3?.web3?.utils.fromWei(
+      token.approved.toString()
+    );
+    const currApproved = approved !== undefined ? approved : "-";
 
     return (
       <div className={`stake-${this.state.isSmall ? "box" : "row"}-container`}>
@@ -141,9 +170,7 @@ export default class Pool extends Component {
             <div className="title">Statistics:</div>
             <Statistics
               t={`${token.unit} Staked`}
-              v={`${convertToETH(token.staked, this.props.token.unit)} ${
-                token.unit
-              }`}
+              v={`${convertToETH(token.staked, token.unit)} ${token.unit}`}
               isConnected={isConnected}
             />
             <Statistics
@@ -155,7 +182,7 @@ export default class Pool extends Component {
           <div className="fields">
             <InputField
               title={"Wallet Balance"}
-              current={convertToETH(token.stakeable, this.props.token.unit)}
+              current={convertToETH(token.stakeable, token.unit)}
               unit={token.unit}
               onMax={this.onMaxStake}
               onAction={this.onStakeExecute}
@@ -164,13 +191,14 @@ export default class Pool extends Component {
               onChange={(e) => this.onStakeChange(e)}
               buttonTitle={"Stake"}
               isConnected={isConnected}
-              isApproved={isApproved}
               isStake={true}
-              subtitle={""}
+              valueApproved={token.approved}
+              subtitle={"Approved: " + currApproved}
+              subtitleAltStyle={true}
             />
             <InputField
               title={"Staked Amount"}
-              current={convertToETH(token.staked, this.props.token.unit)}
+              current={convertToETH(token.staked, token.unit)}
               unit={token.unit}
               onMax={this.onMaxWithdraw}
               onAction={this.onWithdrawExcecute}

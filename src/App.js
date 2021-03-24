@@ -27,7 +27,7 @@ export default class App extends Component {
     this.wethContract = null;
     this.usdcContract = null;
     this.stakeContract = null;
-	this.loyalLeft = 0;
+    this.loyalLeft = 0;
     this.state = { isConnected: false };
   }
 
@@ -63,13 +63,21 @@ export default class App extends Component {
         await this.token.getStaked(this.w3, this.stakeContract);
         await this.token.getPendingLOYAL(this.w3, this.stakeContract);
         await this.token.getEstimatedDailyLOYAL(this.w3, this.stakeContract);
+        await this.token.getApprovedAmount(this.w3, stakeAddress);
       }
       this.setState({ isConnected: isConnected });
     }
   }
 
   getToken = () => {
-    return new Token(pool.address, pool.lpAddress, pool.name, pool.text, pool.unit, pool.logo);
+    return new Token(
+      pool.address,
+      pool.lpAddress,
+      pool.name,
+      pool.text,
+      pool.unit,
+      pool.logo
+    );
   };
 
   getContract = (w3, address) => {
@@ -81,25 +89,44 @@ export default class App extends Component {
   };
 
   getLoyalLeft = async () => {
-	let loyalInPool =
-      (await this.loyalContract.methods.balanceOf(stakeAddress).call()) / 10 ** 18;
-    this.loyalLeft = Number(
-      (loyalInPool).toFixed(0)
-    ).toLocaleString();
+    let rewardRate = await this.stakeContract.methods.rewardRate().call();
+    rewardRate = await this.w3.getWeiToETH(rewardRate);
+    let timeRemainingInPeriod = await this.stakeContract.methods
+      .timeRemainingInPeriod()
+      .call();
+
+    let loyalInPool = rewardRate * (parseInt(timeRemainingInPeriod) - 111379);
+
+    if (loyalInPool < 0) {
+      loyalInPool = 0;
+    }
+
+    this.loyalLeft = Number(loyalInPool.toFixed(2)).toLocaleString();
   };
 
   setChanged = async (changeType) => {
     if (changeType === "DISCONNECTED") {
-        this.token.stakeable = null;
-        this.token.staked = null;
-        this.token.rewards = null;
+      this.token.stakeable = null;
+      this.token.staked = null;
+      this.token.rewards = null;
       this.setState({ isConnected: false });
     } else if (changeType === "CHANGED_ACCOUNT") {
-        await this.token.getStakeable(this.w3);
-        await this.token.getStaked(this.w3, this.stakeContract);
-        await this.token.getPendingLOYAL(this.w3, this.stakeContract);
+      await this.token.getStakeable(this.w3);
+      await this.token.getStaked(this.w3, this.stakeContract);
+      await this.token.getPendingLOYAL(this.w3, this.stakeContract);
+      await this.token.getEstimatedDailyLOYAL(this.w3, this.stakeContract);
+      await this.token.getApprovedAmount(this.w3, stakeAddress);
       this.setState({ isConnected: true });
     }
+  };
+
+  getTokenValues = async () => {
+    await this.token.getStakeable(this.w3);
+    await this.token.getStaked(this.w3, this.stakeContract);
+    await this.token.getPendingLOYAL(this.w3, this.stakeContract);
+    await this.token.getEstimatedDailyLOYAL(this.w3, this.stakeContract);
+    await this.token.getApprovedAmount(this.w3, stakeAddress);
+    this.setState({});
   };
 
   render() {
@@ -116,6 +143,7 @@ export default class App extends Component {
         <Routes
           w3={this.w3}
           token={this.token}
+          getTokenValues={this.getTokenValues}
           loyalLeft={this.loyalLeft}
           stakeContract={this.stakeContract}
           isConnected={this.state.isConnected}
